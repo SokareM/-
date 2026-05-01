@@ -1,14 +1,19 @@
-from flask import Flask, request
+import re
+
+from flask import Flask, request ,send_file
 import pandas as pd
+import io
+import os
+
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     return '''
     <h1>Home</h1>
-    <a href="/store1">Μαγαζί 1</a><br>
-    <a href="/store2">Μαγαζί 2</a><br>
-    <a href="/store3">Μαγαζί 3</a>
+    <a href="/store1">Απογραφή</a><br>
+    <a href="/store2">Ημερομηνίες</a><br>
+    
     '''
 
 
@@ -63,12 +68,42 @@ def store1():
     <form method="POST">
         <button name="compare" value="1">Compare</button>
     </form>
+    <form method="GET" action="/download">
+    <input type="text" name="filename" placeholder="Όνομα αρχείου">
+    <button type="submit">Download</button>
+</form>
+
 
     <br>
 
     {result_html}
     '''
-import os
+@app.route('/download')
+def download():
+    global system_data, store_data
+    filename = request.args.get("filename")
+    if not filename:
+        filename = "result"
+    
+    filename += ".xlsx"    
+    if system_data is None or store_data is None:
+        return "No data"
+
+    merged = pd.merge(system_data, store_data, on='Κωδικός', how='inner')
+    merged['Διαφορά'] = merged['Υπόλοιπο'] - merged['ΣΥΝΟΛΟ']
+
+    result = merged[merged['Διαφορά'] != 0]
+
+    output = io.BytesIO()
+    result.to_excel(output, index=False)
+    output.seek(0)
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0",debug=True, port=int(os.environ.get("PORT", 5000)))
